@@ -54,7 +54,6 @@ venv/
 env/
 ENV/
 *.db
-models/
 magic-pdf.json
 mineru.json
 models2.0/
