@@ -1,15 +1,17 @@
 import os
 import sys
-import json
-import time
-import torch
-import gc
-from loguru import logger
 
 # 添加项目根目录到 Python 路径
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.append(PROJECT_ROOT)
 
+import json
+import time
+import torch
+import gc
+import uuid
+import socket
+from loguru import logger
 from sqlalchemy.orm import Session
 from app.database import get_db_context
 from app.utils.redis_client import redis_client
@@ -31,7 +33,25 @@ WORK_BATCH = os.getenv("WORK_BATCH", 1)
 # Redis Stream 配置
 PARSER_STREAM = "file_parser_stream"
 CONSUMER_GROUP = "parser_workers"
-CONSUMER_NAME = f"worker_{os.getpid()}"
+
+# 生成唯一的 Consumer Name
+# 优先使用环境变量 WORKER_ID，其次使用主机名，最后使用 UUID
+def get_consumer_name():
+    worker_id = os.getenv("WORKER_ID")
+    if worker_id:
+        return f"worker_{worker_id}"
+
+    # Docker 环境下，HOSTNAME 通常是容器 ID 的前 12 位
+    hostname = socket.gethostname()
+    if hostname:
+        return f"worker_{hostname}"
+
+    # 兜底方案：使用 UUID
+    unique_id = str(uuid.uuid4())[:8]
+    return f"worker_{unique_id}"
+
+CONSUMER_NAME = get_consumer_name()
+logger.info(f"Worker Consumer Name: {CONSUMER_NAME}")
 
 def process_task(task_data: dict, db: Session):
     """
