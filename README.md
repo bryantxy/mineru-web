@@ -20,6 +20,7 @@ MinerU Web 是一个现代化的文档智能处理平台，基于先进的 AI �
 - 🛡️ **安全可靠**：完善的权限控制和数据加密机制
 - 🐳 **容器化部署**：提供完整的 Docker 支持，一键部署
 - 🌐 **跨平台**：支持多种硬件架构，包括 x86_64 和 ARM64
+- 🎯 **多硬件加速**：支持 NVIDIA GPU 和华为昇腾 NPU
 
 ## 🛠️ 技术栈
 
@@ -81,6 +82,8 @@ cp mineru.example.json mineru.json
 
 ### 使用 Docker Compose 部署
 
+#### 方式一：NVIDIA GPU 环境部署（x86_64）
+
 ```bash
 # 启动服务
 # 默认不启动vlm服务
@@ -99,6 +102,41 @@ mc alias set local http://localhost:9000 minioadmin minioadmin
 mc anonymous set download local/mds
 
 ```
+
+#### 方式二：华为昇腾 NPU 环境部署（ARM64）
+
+适用于华为昇腾 NPU 硬件环境（ARM64 + Ascend NPU）
+
+**前置要求**：
+- ARM64 架构服务器
+- 华为昇腾 NPU 驱动已安装（通常在 `/usr/local/Ascend/driver`）
+- 确保 NPU 设备可访问：`/dev/davinci*`, `/dev/davinci_manager`, `/dev/devmm_svm`, `/dev/hisi_hdc`
+
+```bash
+# 启动服务
+# 默认不启动vlm服务
+docker-compose -f docker-compose.npu.yml up -d
+
+# 启动vlm服务
+docker-compose -f docker-compose.npu.yml -f docker-compose.vllm.npu.yaml up -d
+
+# 参考以下网址安装mc
+https://min.io/docs/minio/linux/reference/minio-mc.html
+
+# 添加minio的alias
+mc alias set local http://localhost:9000 minioadmin minioadmin
+
+# 设置mds桶为public
+mc anonymous set download local/mds
+
+# 查看NPU使用情况
+npu-smi info
+```
+
+**注意事项**：
+- NPU 版本使用 `lpdswing/mineru-web-backend-npu` 镜像
+- Redis 和 MinIO 镜像会自动使用 ARM64 版本（官方镜像支持多架构）
+- 根据 NPU 显存大小调整 worker 副本数量（环境变量 `WORKER_REPLICAS`）
 
 
 
@@ -129,19 +167,23 @@ docker-compose -f docker-compose.local.yml up -d
 
 ```
 mineru-web/
-├── backend/           # 后端服务
-│   ├── app/          # 应用代码
-│   ├── tests/        # 测试用例
-│   └── Dockerfile    # 后端 Docker 配置
-├── frontend/         # 前端应用
-│   ├── src/         # 源代码
-│   ├── public/      # 静态资源
-│   └── Dockerfile   # 前端 Docker 配置
-├── models/          # AI 模型文件
-├── magic-pdf.json   # 模型配置文件
-├── docker-compose.yml           # 生产环境配置
-├── docker-compose.local.yml     # 开发环境配置
-└── README.md        # 项目文档
+├── backend/                          # 后端服务
+│   ├── app/                         # 应用代码
+│   ├── tests/                       # 测试用例
+│   ├── Dockerfile                   # 后端 Docker 配置（NVIDIA GPU）
+│   └── npu.Dockerfile               # 后端 Docker 配置（华为昇腾 NPU）
+├── frontend/                        # 前端应用
+│   ├── src/                        # 源代码
+│   ├── public/                     # 静态资源
+│   └── Dockerfile                  # 前端 Docker 配置
+├── models/                         # AI 模型文件
+├── magic-pdf.json                  # 模型配置文件
+├── docker-compose.yml              # 生产环境配置（NVIDIA GPU）
+├── docker-compose.npu.yml          # 生产环境配置（华为昇腾 NPU）
+├── docker-compose.vllm.yaml        # vLLM 服务配置（NVIDIA GPU）
+├── docker-compose.vllm.npu.yaml    # vLLM 服务配置（华为昇腾 NPU）
+├── docker-compose.local.yml        # 开发环境配置
+└── README.md                       # 项目文档
 ```
 
 ## 🔧 配置说明
