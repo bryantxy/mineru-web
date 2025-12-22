@@ -1,3 +1,7 @@
+# Docker Compose 配置文件 - 华为昇腾 NPU 版本
+# 适用于 ARM64 架构 + 华为昇腾 NPU 环境
+# For Huawei Ascend NPU (ARM64 + Ascend NPU)
+
 services:
   frontend:
     image: lpdswing/mineru-web-frontend:v2.6.8
@@ -10,14 +14,14 @@ services:
       - mineru-network
 
   backend:
-    image: lpdswing/mineru-web-backend:v2.6.8
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    image: lpdswing/mineru-web-backend-npu:v2.6.8
+    # 昇腾 NPU 设备配置
+    # Ascend NPU device configuration
+    devices:
+      - /dev/davinci0:/dev/davinci0
+      - /dev/davinci_manager:/dev/davinci_manager
+      - /dev/devmm_svm:/dev/devmm_svm
+      - /dev/hisi_hdc:/dev/hisi_hdc
     environment:
       - REDIS_HOST=redis
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
@@ -28,6 +32,7 @@ services:
       - SERVER_URL=http://mineru-vllm-server:30000
       # - MINERU_TABLE_MERGE_ENABLE=0  # 关闭表格合并
     volumes:
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
       - ./backend:/app
       - ./mineru.json:/root/mineru.json
       - ./models2.0:/models
@@ -42,16 +47,16 @@ services:
       - mineru-network
 
   worker:
-    image: lpdswing/mineru-web-backend:v2.6.8
+    image: lpdswing/mineru-web-backend-npu:v2.6.8
     deploy:
-      # 设置 worker 副本数量，根据显存调整，多gpu可以手动拓展worker
+      # 设置 worker 副本数量，根据 NPU 资源调整
       replicas: ${WORKER_REPLICAS:-1}
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']  # 指定使用 0 号 GPU
-              capabilities: [gpu]
+    # 昇腾 NPU 设备配置
+    devices:
+      - /dev/davinci0:/dev/davinci0
+      - /dev/davinci_manager:/dev/davinci_manager
+      - /dev/devmm_svm:/dev/devmm_svm
+      - /dev/hisi_hdc:/dev/hisi_hdc
     command: python3 run_worker.py
     environment:
       - REDIS_HOST=redis
@@ -66,6 +71,7 @@ services:
       # - MINERU_INTER_OP_NUM_THREADS  # oonx模型线程数
       # - MINERU_FORMULA_CH_SUPPORT    # 0/1，开启中文公式解析，开启可能导致MRF性能下降，长公式解析失败
     volumes:
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
       - ./backend:/app
       - ./mineru.json:/root/mineru.json
       - ./models2.0:/models
@@ -78,8 +84,6 @@ services:
         condition: service_healthy
     networks:
       - mineru-network
-
-
 
   redis:
     image: redis:latest
