@@ -1,47 +1,95 @@
 <script setup lang="ts">
 import { HomeFilled, Upload, Document, Setting } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ref, computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const menuItems = [
-  { icon: HomeFilled, path: '/', tooltip: '首页' },
-  { icon: Document, path: '/files', tooltip: '文件管理' },
-  { icon: Upload, path: '/upload', tooltip: '上传' }
+  { icon: HomeFilled, path: '/', tooltip: '首页', label: '首页' },
+  { icon: Document, path: '/files', tooltip: '文件管理', label: '文件' },
+  { icon: Upload, path: '/upload', tooltip: '上传', label: '上传' }
 ]
 
-const activeMenu = () => {
+const activeMenu = computed(() => {
   const path = route.path
-  // 特殊处理首页
   if (path === '/') return '/'
-  // 其他页面需要完全匹配路径
   return menuItems.find(item => path === item.path)?.path || path
-}
+})
 
-// 检查是否是设置页面
-const isSettingsPage = () => route.path === '/settings'
+const isSettingsPage = computed(() => route.path === '/settings')
+
+const sidebarHover = ref(false)
 </script>
 
 <template>
   <div class="mineru-layout">
     <!-- 侧边栏 -->
-    <aside class="sidebar">
+    <aside 
+      class="sidebar" 
+      :class="{ 'sidebar-expanded': sidebarHover }"
+      @mouseenter="sidebarHover = true"
+      @mouseleave="sidebarHover = false"
+    >
       <div class="logo-area">
-        <img src="/logo.png" alt="logo" class="logo" />
+        <div class="logo-wrapper">
+          <img src="/logo.png" alt="logo" class="logo" />
+          <transition name="fade">
+            <span v-show="sidebarHover" class="logo-text">MinerU</span>
+          </transition>
+        </div>
       </div>
+      
       <nav class="nav-menu">
-        <div v-for="item in menuItems" :key="item.path" class="nav-item" :class="{active: activeMenu() === item.path}" @click="router.push(item.path)" :title="item.tooltip">
-          <el-icon :size="24"><component :is="item.icon" /></el-icon>
+        <div 
+          v-for="item in menuItems" 
+          :key="item.path" 
+          class="nav-item" 
+          :class="{ active: activeMenu === item.path }" 
+          @click="router.push(item.path)"
+        >
+          <div class="nav-icon-wrapper">
+            <el-icon :size="22"><component :is="item.icon" /></el-icon>
+          </div>
+          <transition name="fade">
+            <span v-show="sidebarHover" class="nav-label">{{ item.label }}</span>
+          </transition>
+          <div v-if="activeMenu === item.path" class="nav-indicator"></div>
         </div>
       </nav>
+      
       <div class="sidebar-bottom">
-        <el-icon class="sidebar-icon" :class="{active: isSettingsPage()}" @click="router.push('/settings')" title="设置"><Setting /></el-icon>
-        <a href="https://github.com/lpdswing/Mineru-Web" target="_blank" rel="noopener noreferrer" class="github-link" title="GitHub">
-          <img src="/github-logo.svg" alt="GitHub" width="22" height="22" />
+        <div 
+          class="nav-item settings-item" 
+          :class="{ active: isSettingsPage }" 
+          @click="router.push('/settings')"
+        >
+          <div class="nav-icon-wrapper">
+            <el-icon :size="20"><Setting /></el-icon>
+          </div>
+          <transition name="fade">
+            <span v-show="sidebarHover" class="nav-label">设置</span>
+          </transition>
+        </div>
+        
+        <a 
+          href="https://github.com/lpdswing/Mineru-Web" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          class="github-link"
+        >
+          <img src="/github-logo.svg" alt="GitHub" width="20" height="20" />
+          <transition name="fade">
+            <span v-show="sidebarHover" class="nav-label">GitHub</span>
+          </transition>
         </a>
-        <div class="version-info">
-          mineru-2.6.8
+        
+        <div class="version-badge">
+          <span class="version-dot"></span>
+          <transition name="fade">
+            <span v-show="sidebarHover" class="version-text">v2.7.1</span>
+          </transition>
         </div>
       </div>
     </aside>
@@ -53,7 +101,7 @@ const isSettingsPage = () => route.path === '/settings'
       </template>
       <template v-else>
         <main class="content-area">
-          <div :class="['content-card', { 'content-full': route.path !== '/' }]">
+          <div :class="['content-wrapper', { 'content-full': route.path !== '/' }]">
             <router-view />
           </div>
         </main>
@@ -66,187 +114,312 @@ const isSettingsPage = () => route.path === '/settings'
 .mineru-layout {
   display: flex;
   min-height: 100vh;
-  background: #f7f8fa;
-  box-sizing: border-box;
+  background: var(--bg-secondary);
 }
+
+/* 侧边栏 */
 .sidebar {
-  width: 88px;
-  background: #fff;
+  width: 72px;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 2px 0 8px 0 rgba(0,0,0,0.03);
-  z-index: 10;
-  box-sizing: border-box;
-  padding: 24px 0;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  padding: 16px 12px;
   flex-shrink: 0;
   min-height: 100vh;
+  transition: width var(--transition-normal);
+  position: relative;
 }
+
+.sidebar-expanded {
+  width: 180px;
+}
+
+/* Logo区域 */
 .logo-area {
-  height: 48px;
+  padding: 8px 0 24px;
+  width: 100%;
+}
+
+.logo-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  gap: 10px;
 }
+
 .logo {
   width: 36px;
   height: 36px;
+  transition: transform var(--transition-normal);
 }
+
+.sidebar:hover .logo {
+  transform: scale(1.05);
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+}
+
+/* 导航菜单 */
 .nav-menu {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
+  width: 100%;
+  padding: 0 4px;
 }
+
 .nav-item {
-  width: 48px;
-  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+.nav-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: rgb(99 102 241 / 0.1);
+  color: var(--primary-color);
+}
+
+.nav-icon-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
+  min-width: 24px;
 }
-.nav-item.active, .nav-item:hover {
-  background: #f0f4ff;
+
+.nav-label {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
 }
+
+.nav-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--primary-gradient);
+  border-radius: 0 3px 3px 0;
+}
+
+/* 底部区域 */
 .sidebar-bottom {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 4px;
   margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
 }
-.sidebar-icon {
-  font-size: 22px;
-  color: #b1b3b8;
-  cursor: pointer;
-  transition: color 0.2s;
+
+.settings-item {
+  margin-bottom: 4px;
 }
-.sidebar-icon:hover, .sidebar-icon.active {
-  color: #409eff;
-}
+
 .github-link {
-  margin-top: -8px;
-  opacity: 0.65;
-  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: all var(--transition-normal);
 }
+
 .github-link:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.github-link img {
+  opacity: 0.6;
+  transition: opacity var(--transition-normal);
+}
+
+.github-link:hover img {
   opacity: 1;
 }
-.version-info {
-  text-align: center;
-  font-size: 12px;
-  color: #b1b3b8;
-  margin-top: -12px;
-  transform: scale(0.9);
+
+.version-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
 }
+
+.version-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--success-color);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.version-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 主内容区 */
 .main-area {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  box-sizing: border-box;
-  min-height: 100vh;
-  overflow: auto;
+  height: 100vh;
 }
+
 .content-area {
   flex: 1;
   width: 100%;
-  background: #f7f8fa;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: stretch;
   padding: 24px;
-  box-sizing: border-box;
+  min-height: 0;
 }
-.content-card {
+
+.content-wrapper {
   width: 100%;
   max-width: 1200px;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.04);
-  padding: 20px 16px 24px 16px;
-  margin: 0;
-  position: relative;
-  transition: all 0.2s;
-  box-sizing: border-box;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  animation: fadeIn 0.3s ease;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
-/* 非首页全屏内容区样式 */
+
 .content-full {
   max-width: none;
-  min-height: 0;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
   padding: 0;
-  margin: 0;
-  box-sizing: border-box;
+  height: 100%;
 }
-.content-card :deep(.el-table) {
-  width: 100%;
+
+/* 过渡动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
-@media (max-width: 900px) {
-  .content-card {
-    padding: 8px 2px;
-    min-height: 0;
-  }
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
+
+/* 响应式 */
 @media (max-width: 1200px) {
-  .sidebar {
-    width: 76px;
-  }
   .content-area {
-    padding: 20px;
+    padding: 24px;
   }
 }
+
 @media (max-width: 768px) {
   .mineru-layout {
     flex-direction: column;
   }
+  
   .sidebar {
     width: 100%;
     min-height: auto;
     padding: 12px 16px;
     flex-direction: row;
     align-items: center;
-    gap: 16px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    gap: 8px;
   }
+  
+  .sidebar-expanded {
+    width: 100%;
+  }
+  
   .logo-area {
-    justify-content: flex-start;
+    padding: 0;
     width: auto;
-    height: auto;
   }
+  
+  .logo-text {
+    display: none;
+  }
+  
   .nav-menu {
     flex-direction: row;
-    margin-top: 0;
+    flex: 1;
     justify-content: center;
-    gap: 12px;
+    gap: 4px;
+    padding: 0;
   }
+  
+  .nav-item {
+    padding: 10px 14px;
+  }
+  
+  .nav-label {
+    display: none;
+  }
+  
+  .nav-indicator {
+    display: none;
+  }
+  
   .sidebar-bottom {
     flex-direction: row;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 0;
+    gap: 8px;
     margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    width: auto;
   }
-  .version-info {
+  
+  .version-badge {
     display: none;
   }
+  
   .main-area {
     min-height: auto;
-    width: 100%;
   }
+  
   .content-area {
     padding: 16px;
   }
-  .content-card {
-    border-radius: 16px;
-    padding: 16px 12px 20px 12px;
+  
+  .content-wrapper {
+    border-radius: var(--radius-lg);
+    padding: 20px;
   }
 }
 </style>

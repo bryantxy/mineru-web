@@ -21,7 +21,11 @@ const router = createRouter({
     {
       path: '/files/preview/:id',
       name: 'FilePreview',
-      component: () => import('../views/FilePreview.vue')
+      component: () => import('../views/FilePreview.vue'),
+      props: route => ({
+        fileId: route.params.id,
+        page: Number(route.query.page) || 1
+      })
     },
     {
       path: '/settings',

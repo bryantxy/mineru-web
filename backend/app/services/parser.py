@@ -31,6 +31,7 @@ from mineru.backend.vlm.vlm_middle_json_mkcontent import (
     union_make as vlm_union_make,
     mk_blocks_to_markdown
 )
+from mineru.backend.hybrid.hybrid_analyze import doc_analyze as hybrid_doc_analyze
 from app.models.settings import Settings
 from app.utils.redis_client import redis_client
 
@@ -211,6 +212,71 @@ def _process_vlm(
     return md_content_list
 
 
+def _process_hybrid(
+    pdf_file_names: list[str],
+    pdf_bytes_list: list[bytes],
+    p_lang_list: list[str],
+    backend: str,
+    parse_method: str,
+    server_url: str,
+    p_formula_enable: bool,
+    p_table_enable: bool,
+    md_writer: DataWriter,
+    image_writer: DataWriter,
+    mds_bucket: str,
+    f_dump_md: bool,
+    f_dump_content_list: bool,
+    f_dump_middle_json: bool,
+    f_dump_model_output: bool,
+    f_make_md_mode: MakeMode,
+) -> list[str]:
+    """
+    处理 hybrid 后端的解析逻辑
+    参考 common.py 的 hybrid 处理设计
+    """
+    md_content_list = []
+
+    # 移除 hybrid- 前缀
+    if backend.startswith("hybrid-"):
+        backend = backend[7:]
+
+    # 如果不是 client 后端，server_url 设为 None
+    if not backend.endswith("client"):
+        server_url = None
+
+    # 调整 parse_method 前缀
+    hybrid_parse_method = f"hybrid_{parse_method}"
+
+    # 处理每个文件
+    for idx, pdf_bytes in enumerate(pdf_bytes_list):
+        pdf_file_name = pdf_file_names[idx]
+        language = p_lang_list[idx]
+
+        # 执行 hybrid 分析
+        middle_json, infer_result, _vlm_ocr_enable = hybrid_doc_analyze(
+            pdf_bytes,
+            image_writer=image_writer,
+            backend=backend,
+            parse_method=hybrid_parse_method,
+            language=language,
+            inline_formula_enable=p_formula_enable,
+            server_url=server_url,
+        )
+        pdf_info = middle_json["pdf_info"]
+
+        # 统一输出处理 (hybrid 使用 vlm_union_make)
+        md_content_str = _write_outputs(
+            pdf_file_name, pdf_info, middle_json, infer_result,
+            md_writer, mds_bucket, "hybrid",
+            f_dump_md, f_dump_content_list, f_dump_middle_json,
+            f_dump_model_output, f_make_md_mode,
+            p_formula_enable, p_table_enable
+        )
+        md_content_list.append(md_content_str)
+
+    return md_content_list
+
+
 def _write_outputs(
     pdf_file_name: str,
     pdf_info: dict,
@@ -289,7 +355,7 @@ class ParserService:
             pdf_file_names: list[str],
             pdf_bytes_list: list[bytes],
             p_lang_list: list[str],
-            backend="pipeline",
+            backend="hybrid-http-client",
             parse_method="auto",
             p_formula_enable=True,
             p_table_enable=True,
@@ -322,6 +388,26 @@ class ParserService:
                 pdf_bytes_list,
                 p_lang_list,
                 parse_method,
+                p_formula_enable,
+                p_table_enable,
+                md_writer,
+                image_writer,
+                mds_bucket,
+                f_dump_md,
+                f_dump_content_list,
+                f_dump_middle_json,
+                f_dump_model_output,
+                f_make_md_mode
+            )
+        elif backend.startswith("hybrid-"):
+            # Hybrid 后端处理
+            return _process_hybrid(
+                pdf_file_names,
+                pdf_bytes_list,
+                p_lang_list,
+                backend,
+                parse_method,
+                server_url,
                 p_formula_enable,
                 p_table_enable,
                 md_writer,

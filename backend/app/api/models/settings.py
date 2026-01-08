@@ -4,9 +4,10 @@ import enum
 
 class BackendType(enum.Enum):
     PIPELINE = 'pipeline'
-    # VLM_TRANSFORMERS = 'vlm-transformers' 
+    # VLM_TRANSFORMERS = 'vlm-transformers'
     # VLM_SGLANG_ENGINE = 'vlm-sglang-engine'
     VLM_HTTP_CLIENT = 'vlm-http-client'
+    HYBRID_HTTP_CLIENT = 'hybrid-http-client'
 
 class Settings(Base):
     __tablename__ = 'settings'

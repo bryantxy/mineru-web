@@ -1,97 +1,131 @@
 <template>
   <div class="upload-root">
-    <div class="upload-card">
-      <div class="upload-header">
-        <span class="upload-title">点击或拖拽上传文档</span>
-        <el-button class="url-btn" type="default" size="small" plain @click="showUrlDialog = true">
-          <el-icon><link /></el-icon> URL 上传
-        </el-button>
-      </div>
-      <el-upload
-        ref="uploadRef"
-        class="upload-area"
-        drag
-        action="/api/upload"
-        :auto-upload="false"
-        :on-change="handleFileChange"
-        :on-remove="handleFileRemove"
-        :before-upload="beforeUpload"
-        accept=".pdf,.png,.jpeg,.jp2,.webp,.gif,.bmp,.jpg,.tiff"
-        multiple
-        :limit="20"
-        :disabled="uploading"
-      >
-        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          拖拽文件到此处，或 <span class="upload-link">点击上传</span>
+    <div class="upload-container">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="header-left">
+          <h1 class="page-title">上传文档</h1>
+          <span class="page-subtitle">支持拖拽或点击上传</span>
         </div>
-        <template #tip>
-          <div class="el-upload__tip">
-            支持的文件类型：PDF、PNG、JPG、JPEG、JP2、WEBP、GIF、BMP、TIFF
-            <br>
-            单个文档不超过 <b>200M</b> 或 <b>600</b> 页，单图片不超过 <b>10M</b>，单次最多 <b>20</b> 个文件
+      </div>
+
+      <!-- 上传区域 -->
+      <div class="upload-zone">
+        <el-upload
+          ref="uploadRef"
+          class="upload-dragger"
+          drag
+          action="/api/upload"
+          :auto-upload="false"
+          :on-change="handleFileChange"
+          :on-remove="handleFileRemove"
+          :before-upload="beforeUpload"
+          accept=".pdf,.png,.jpeg,.jp2,.webp,.gif,.bmp,.jpg,.tiff"
+          multiple
+          :limit="20"
+          :disabled="uploading"
+          :show-file-list="false"
+        >
+          <div class="upload-content">
+            <div class="upload-icon-wrapper">
+              <el-icon class="upload-icon" :size="48"><UploadFilled /></el-icon>
+            </div>
+            <div class="upload-text">
+              <p class="upload-main-text">拖拽文件到此处，或 <span class="upload-link">点击上传</span></p>
+              <p class="upload-hint">支持 PDF、PNG、JPG、JPEG、JP2、WEBP、GIF、BMP、TIFF</p>
+            </div>
           </div>
-        </template>
-      </el-upload>
-      <div class="upload-list" v-if="fileList.length > 0">
-        <div class="upload-list-header">
-          <span>待上传文件列表</span>
-          <el-button type="primary" @click="handleUpload" :loading="uploading" :disabled="uploading || fileList.length === 0" size="small">
-            <el-icon v-if="!uploading"><upload-filled /></el-icon>
-            <span v-if="!uploading">开始上传</span>
-            <span v-else>上传中...</span>
+        </el-upload>
+      </div>
+
+      <!-- 文件列表 -->
+      <div class="file-list-section" v-if="fileList.length > 0">
+        <div class="section-header">
+          <div class="section-title">
+            <el-icon><Document /></el-icon>
+            <span>待上传文件</span>
+            <span class="file-count-badge">{{ fileList.length }}</span>
+          </div>
+          <el-button 
+            type="primary" 
+            @click="handleUpload" 
+            :loading="uploading" 
+            :disabled="uploading || fileList.length === 0"
+          >
+            <el-icon v-if="!uploading"><UploadFilled /></el-icon>
+            <span>{{ uploading ? '上传中...' : '开始上传' }}</span>
           </el-button>
         </div>
-        <el-table :data="fileList" border stripe>
-          <el-table-column prop="name" label="文件名" />
-          <el-table-column prop="size" label="大小" width="120">
-            <template #default="{ row }">{{ formatFileSize(row.size) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="120">
-            <template #default="{ row }">
-              <el-tag :type="getUploadStatusType(row.status)">
-                {{ getUploadStatusText(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120">
-            <template #default="{ row }">
-              <el-button 
-                type="danger" 
-                link 
-                @click="handleFileRemove(row)"
-                :disabled="row.status === 'uploading' || uploading"
-              >
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+
+        <div class="file-list">
+          <div 
+            v-for="(file, index) in fileList" 
+            :key="index" 
+            class="file-item"
+            :class="{ 'file-uploading': file.status === 'uploading' }"
+          >
+            <div class="file-icon">
+              <el-icon :size="24"><Document /></el-icon>
+            </div>
+            <div class="file-info">
+              <div class="file-name">{{ file.name }}</div>
+              <div class="file-meta">
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                <span class="file-status" :class="getStatusClass(file.status)">
+                  {{ getUploadStatusText(file.status) }}
+                </span>
+              </div>
+            </div>
+            <el-button 
+              type="danger" 
+              link 
+              class="file-remove"
+              @click="handleFileRemove(file)"
+              :disabled="file.status === 'uploading' || uploading"
+            >
+              <el-icon><Close /></el-icon>
+            </el-button>
+          </div>
+        </div>
       </div>
-      <el-empty v-else description="暂无待上传文件，快来体验智能解析吧！" :image-size="100" class="upload-empty" />
+
+      <!-- 空状态 -->
+      <div v-else class="empty-state">
+        <el-empty description="暂无待上传文件" :image-size="120">
+          <template #description>
+            <p class="empty-text">拖拽或点击上方区域选择文件</p>
+          </template>
+        </el-empty>
+      </div>
+
+      <!-- 限制说明 -->
+      <div class="limits-info">
+        <div class="limit-item">
+          <el-icon><InfoFilled /></el-icon>
+          <span>单个文档 ≤ 200MB 或 600页</span>
+        </div>
+        <div class="limit-item">
+          <el-icon><InfoFilled /></el-icon>
+          <span>单张图片 ≤ 10MB</span>
+        </div>
+        <div class="limit-item">
+          <el-icon><InfoFilled /></el-icon>
+          <span>单次最多 20 个文件</span>
+        </div>
+      </div>
     </div>
-    <el-dialog v-model="showUrlDialog" title="URL 上传" width="400px" :close-on-click-modal="false">
-      <el-form @submit.prevent>
-        <el-form-item label="文档URL" :error="urlError">
-          <el-input v-model="urlInput" placeholder="请输入文档下载地址" clearable />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showUrlDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleUrlUpload">添加到上传列表</el-button>
-      </template>
-    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { UploadFilled, Document, Close, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadInstance } from 'element-plus'
 import { filesApi } from '@/api/files'
 import { formatFileSize } from '@/utils/format'
-import { getUploadStatusText, getUploadStatusType } from '@/utils/status'
+import { getUploadStatusText } from '@/utils/status'
 
 interface UploadFile {
   name: string
@@ -103,41 +137,35 @@ interface UploadFile {
 
 const fileList = ref<UploadFile[]>([])
 const uploading = ref(false)
-
-// URL上传相关
-const showUrlDialog = ref(false)
-const urlInput = ref('')
-const urlError = ref('')
-
 const uploadRef = ref<UploadInstance>()
 
+const getStatusClass = (status: string) => {
+  const map: Record<string, string> = {
+    waiting: 'status-waiting',
+    uploading: 'status-uploading',
+    success: 'status-success',
+    error: 'status-error'
+  }
+  return map[status] || ''
+}
 
 const beforeUpload = (file: File) => {
-  // 检查文件大小
   const isLt200M = file.size / 1024 / 1024 < 200
   if (!isLt200M) {
     ElMessage.error('文件大小不能超过 200MB!')
     return false
   }
 
-  // 检查文件类型
-  const allowedTypes = [
-    // PDF
-    '.pdf',
-    // 图片格式
-    '.png', '.jpg', '.jpeg', '.jp2', '.webp', '.gif', '.bmp', '.tiff'
-  ]
-
+  const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.jp2', '.webp', '.gif', '.bmp', '.tiff']
   const fileExt = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
 
-  // 检查是否是 Excel 文件
   if (fileExt === '.xls' || fileExt === '.xlsx') {
     ElMessage.error('不支持 Excel 文件上传！')
     return false
   }
 
   if (!allowedTypes.includes(fileExt)) {
-    ElMessage.error(`不支持的文件类型！支持的格式：PDF、PNG、JPG、JPEG、JP2、WEBP、GIF、BMP、TIFF`)
+    ElMessage.error(`不支持的文件类型！`)
     return false
   }
 
@@ -145,10 +173,7 @@ const beforeUpload = (file: File) => {
 }
 
 const handleFileChange = (file: any) => {
-  // 在文件变化时也进行类型检查
-  if (!beforeUpload(file.raw)) {
-    return
-  }
+  if (!beforeUpload(file.raw)) return
 
   fileList.value.push({
     name: file.name,
@@ -165,31 +190,6 @@ const handleFileRemove = (file: UploadFile) => {
   }
 }
 
-const handleUrlUpload = () => {
-  urlError.value = ''
-  const url = urlInput.value.trim()
-  if (!url) {
-    urlError.value = '请输入文档URL'
-    return
-  }
-  // 简单校验URL格式
-  if (!/^https?:\/\//.test(url)) {
-    urlError.value = '请输入有效的URL（http/https）'
-    return
-  }
-  // 模拟文件名
-  const name = url.split('/').pop() || '远程文档.pdf'
-  fileList.value.push({
-    name: name,
-    size: 0,
-    status: 'waiting',
-    url
-  })
-  showUrlDialog.value = false
-  urlInput.value = ''
-  ElMessage.success('已添加到上传列表')
-}
-
 const handleUpload = async () => {
   if (fileList.value.length === 0) {
     ElMessage.warning('请先选择要上传的文件')
@@ -203,7 +203,6 @@ const handleUpload = async () => {
       if (file.raw) {
         formData.append('files', file.raw)
       }
-      // 如有URL上传，也可在此处理
     })
 
     const result = await filesApi.uploadFiles(formData)
@@ -211,13 +210,11 @@ const handleUpload = async () => {
     if (result && result.total > 0) {
       ElMessage.success('文件上传成功，已进入解析队列！')
       fileList.value = []
-      // 清空el-upload组件的文件列表
       uploadRef.value?.clearFiles()
     } else {
       ElMessage.error('文件上传失败，请重试！')
     }
   } catch (error) {
-    // 错误已在拦截器中处理
   } finally {
     uploading.value = false
   }
@@ -225,123 +222,295 @@ const handleUpload = async () => {
 </script>
 
 <style scoped>
-
 .upload-root {
   width: 100%;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 32px 0 0 0;
-  box-sizing: border-box;
-  /* min-height: 70vh; */
-  /* height: auto; */
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+  height: 100%;
+  overflow: auto;
 }
-.upload-card {
+
+.upload-container {
   width: 100%;
-  max-width: 80vw;
-  background: transparent;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 24px 0;
+  max-width: 720px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 16px;
 }
-.upload-header {
-  width: 100%;
+
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
 }
-.upload-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: #222;
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.url-btn {
-  border-radius: 8px;
-  font-size: 0.98rem;
-  background: #f7f8fa;
-  color: #409eff;
-  border: none;
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
 }
-.upload-area {
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.upload-zone {
   width: 100%;
-  margin-bottom: 18px;
 }
+
+.upload-dragger {
+  width: 100%;
+}
+
+.upload-dragger :deep(.el-upload-dragger) {
+  width: 100%;
+  padding: 32px 24px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-xl);
+  background: var(--bg-secondary);
+  transition: all var(--transition-normal);
+}
+
+.upload-dragger :deep(.el-upload-dragger:hover) {
+  border-color: var(--primary-color);
+  background: rgb(99 102 241 / 0.02);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-icon-wrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgb(99 102 241 / 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-icon {
+  color: var(--primary-color);
+}
+
+.upload-text {
+  text-align: center;
+}
+
+.upload-main-text {
+  font-size: 16px;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
 .upload-link {
-  color: #409eff;
+  color: var(--primary-color);
   font-weight: 500;
   cursor: pointer;
 }
-.upload-list {
-  width: 100%;
-  margin-top: 18px;
-  /* max-height: 400px; */
-  overflow-y: auto;
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
 }
-.upload-list-header {
+
+.file-list-section {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
 }
-.upload-empty {
-  margin: 32px 0 0 0;
-  height: auto;
-  max-height: 10vh;
-}
-:deep(.el-upload-dragger) {
-  width: 100%;
-  border-radius: 12px;
-  background: #f7f8fa;
-  border: 1.5px dashed #b1b3b8;
-  min-height: 180px;
+
+.section-title {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.file-count-badge {
+  background: var(--primary-color);
+  color: white;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 200px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-item:hover {
+  background: var(--bg-hover);
+}
+
+.file-uploading {
+  background: rgb(99 102 241 / 0.04);
+}
+
+.file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
   justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
-:deep(.el-upload__tip) {
-  margin-top: 8px;
-  color: #909399;
+
+.file-info {
+  flex: 1;
+  min-width: 0;
 }
-:deep(.el-table) {
-  border-radius: 12px;
+
+.file-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
-@media (max-width: 1024px) {
-  .upload-card {
-    max-width: 680px;
-    padding: 24px 16px;
-  }
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
 }
+
+.file-size {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.file-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status-waiting {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+.status-uploading {
+  background: rgb(99 102 241 / 0.1);
+  color: var(--primary-color);
+}
+
+.status-success {
+  background: rgb(16 185 129 / 0.1);
+  color: var(--success-color);
+}
+
+.status-error {
+  background: rgb(239 68 68 / 0.1);
+  color: var(--danger-color);
+}
+
+.file-remove {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.file-item:hover .file-remove {
+  opacity: 1;
+}
+
+.empty-state {
+  padding: 24px 20px;
+  text-align: center;
+  flex: 1;
+}
+
+.empty-text {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.limits-info {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.limit-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 @media (max-width: 768px) {
   .upload-root {
-    padding: 20px 16px 0 16px;
+    padding: 20px 16px;
   }
-  .upload-card {
-    max-width: 100%;
-    padding: 20px 12px;
-  }
-  .upload-header {
+  
+  .page-header {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 12px;
   }
+  
   .url-btn {
-    align-self: flex-end;
+    width: 100%;
   }
-  .upload-list-header {
+  
+  .limits-info {
     flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .upload-list-header > span {
-    font-weight: 600;
-  }
-  :deep(.el-upload-dragger) {
-    min-height: 160px;
+    align-items: center;
+    gap: 8px;
   }
 }
-</style> 
+</style>

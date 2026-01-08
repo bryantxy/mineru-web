@@ -59,7 +59,8 @@ export function getUploadStatusType(status: string): string {
 // 后端配置映射
 export const BackendConfig = {
   pipeline: { icon: 'Pipeline', color: '#409EFF' },
-  vlm: { icon: 'VLM', color: '#67C23A' }
+  vlm: { icon: 'VLM', color: '#67C23A' },
+  hybrid: { icon: 'Hybrid', color: '#E6A23C' }
 } as const
 
 /**
