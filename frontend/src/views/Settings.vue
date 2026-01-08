@@ -1,65 +1,117 @@
 <template>
   <div class="settings-root">
-    <div class="settings-card">
-      <div class="settings-header">系统设置</div>
-      <el-form :model="settings" label-width="120px" class="settings-form">
-        <el-form-item label="强制开启OCR">
-          <el-switch
-            v-model="settings.forceOcr"
-            active-text="开启"
-            inactive-text="关闭"
-            :disabled="settings.backend !== 'pipeline'"
-          />
-          <div v-if="settings.backend !== 'pipeline'" class="settings-tip">
-            只有在Pipeline模式下可以设置强制OCR
+    <div class="settings-container">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="header-icon">
+          <el-icon :size="24"><Setting /></el-icon>
+        </div>
+        <div class="header-text">
+          <h1 class="page-title">系统设置</h1>
+          <p class="page-subtitle">配置文档解析参数</p>
+        </div>
+      </div>
+
+      <!-- 设置表单 -->
+      <div class="settings-card">
+        <el-form :model="settings" label-position="top" class="settings-form">
+          <!-- OCR设置组 -->
+          <div class="form-section">
+            <div class="section-title">
+              <el-icon><View /></el-icon>
+              <span>OCR 设置</span>
+            </div>
+            
+            <div class="form-grid">
+              <el-form-item label="强制开启OCR">
+                <div class="switch-wrapper">
+                  <el-switch
+                    v-model="settings.forceOcr"
+                    :disabled="settings.backend !== 'pipeline'"
+                  />
+                  <span class="switch-label">{{ settings.forceOcr ? '已开启' : '已关闭' }}</span>
+                </div>
+                <div v-if="settings.backend !== 'pipeline'" class="form-tip">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>仅 Pipeline 模式支持此选项</span>
+                </div>
+              </el-form-item>
+
+              <el-form-item label="OCR识别语言">
+                <el-select v-model="settings.ocrLanguage" class="full-width">
+                  <el-option label="中英日繁混合 (ch)" value="ch" />
+                  <el-option label="中英日繁混合+手写 (ch_server)" value="ch_server" />
+                  <el-option label="中英日繁混合+手写 (ch_lite)" value="ch_lite" />
+                  <el-option label="英语 (en)" value="en" />
+                  <el-option label="韩语 (korean)" value="korean" />
+                  <el-option label="日语 (japan)" value="japan" />
+                  <el-option label="繁体中文 (chinese_cht)" value="chinese_cht" />
+                  <el-option label="泰米尔语 (ta)" value="ta" />
+                  <el-option label="泰卢固语 (te)" value="te" />
+                  <el-option label="格鲁吉亚语 (ka)" value="ka" />
+                  <el-option label="拉丁语 (latin)" value="latin" />
+                  <el-option label="阿拉伯语 (arabic)" value="arabic" />
+                  <el-option label="东斯拉夫语 (east_slavic)" value="east_slavic" />
+                  <el-option label="西里尔语 (cyrillic)" value="cyrillic" />
+                  <el-option label="天城文 (devanagari)" value="devanagari" />
+                </el-select>
+              </el-form-item>
+            </div>
           </div>
-        </el-form-item>
-        <el-form-item label="OCR识别语言">
-          <el-select v-model="settings.ocrLanguage" class="settings-select">
-            <el-option label="中英日繁混合(ch)" value="ch" />
-            <el-option label="中英日繁混合+手写场景(ch_server)" value="ch_server" />
-            <el-option label="中英日繁混合+手写场景(ch_lite)" value="ch_lite" />
-            <el-option label="英语(en)" value="en" />
-            <el-option label="韩语(korean)" value="korean" />
-            <el-option label="日语(japan)" value="japan" />
-            <el-option label="繁体中文(chinese_cht)" value="chinese_cht" />
-            <el-option label="泰米尔语(ta)" value="ta" />
-            <el-option label="泰卢固语(te)" value="te" />
-            <el-option label="格鲁吉亚语(ka)" value="ka" />
-            <el-option label="拉丁语(latin)" value="latin" />
-            <el-option label="阿拉伯语(arabic)" value="arabic" />
-            <el-option label="东斯拉夫语(east_slavic)" value="east_slavic" />
-            <el-option label="西里尔语(cyrillic)" value="cyrillic" />
-            <el-option label="天城文(devanagari)" value="devanagari" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="公式识别">
-          <el-switch
-            v-model="settings.formulaRecognition"
-            active-text="开启"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item label="表格识别">
-          <el-switch
-            v-model="settings.tableRecognition"
-            active-text="开启"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item label="后端引擎">
-          <el-select v-model="settings.backend" class="settings-select">
-            <el-option label="Pipeline" value="pipeline" />
-            <!-- <el-option label="VLM Transformers" value="vlm-transformers" /> -->
-            <!-- <el-option label="VLM SgLang Engine" value="vlm-sglang-engine" /> -->
-            <el-option label="VLM HTTP Client" value="vlm-http-client" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="saveSettings" size="large">保存设置</el-button>
-          <el-button @click="resetSettings" size="large">重置</el-button>
-        </el-form-item>
-      </el-form>
+
+          <!-- 识别功能组 -->
+          <div class="form-section">
+            <div class="section-title">
+              <el-icon><Document /></el-icon>
+              <span>识别功能</span>
+            </div>
+            
+            <div class="form-grid">
+              <el-form-item label="公式识别">
+                <div class="switch-wrapper">
+                  <el-switch v-model="settings.formulaRecognition" />
+                  <span class="switch-label">{{ settings.formulaRecognition ? '已开启' : '已关闭' }}</span>
+                </div>
+              </el-form-item>
+
+              <el-form-item label="表格识别">
+                <div class="switch-wrapper">
+                  <el-switch v-model="settings.tableRecognition" />
+                  <span class="switch-label">{{ settings.tableRecognition ? '已开启' : '已关闭' }}</span>
+                </div>
+              </el-form-item>
+            </div>
+          </div>
+
+          <!-- 引擎设置组 -->
+          <div class="form-section">
+            <div class="section-title">
+              <el-icon><Cpu /></el-icon>
+              <span>后端引擎</span>
+            </div>
+            
+            <el-form-item label="选择引擎">
+              <el-select v-model="settings.backend" class="full-width">
+                <el-option label="Pipeline" value="pipeline" />
+                <el-option label="VLM HTTP Client" value="vlm-http-client" />
+                <el-option label="Hybrid HTTP Client" value="hybrid-http-client" />
+              </el-select>
+            </el-form-item>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="form-actions">
+            <el-button @click="resetSettings" size="large">
+              <el-icon><RefreshRight /></el-icon>
+              <span>重置</span>
+            </el-button>
+            <el-button type="primary" @click="saveSettings" size="large">
+              <el-icon><Check /></el-icon>
+              <span>保存设置</span>
+            </el-button>
+          </div>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
@@ -67,6 +119,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Setting, View, Document, Cpu, InfoFilled, RefreshRight, Check } from '@element-plus/icons-vue'
 import { settingsApi } from '@/api/settings'
 import { getUserId } from '@/utils/user'
 
@@ -76,7 +129,7 @@ interface Settings {
   formulaRecognition: boolean
   tableRecognition: boolean
   version: string
-  backend: 'pipeline' | 'vlm-http-client'
+  backend: 'pipeline' | 'vlm-http-client' | 'hybrid-http-client'
 }
 
 const defaultSettings: Settings = {
@@ -85,12 +138,11 @@ const defaultSettings: Settings = {
   formulaRecognition: true,
   tableRecognition: true,
   version: '',
-  backend: 'pipeline'
+  backend: 'hybrid-http-client'
 }
 
 const settings = ref<Settings>({ ...defaultSettings })
 
-// 加载设置
 const loadSettings = async () => {
   try {
     const data = await settingsApi.getSettings()
@@ -102,12 +154,9 @@ const loadSettings = async () => {
       version: data.version || '',
       backend: data.backend || 'pipeline'
     }
-  } catch (error) {
-    // 错误已在拦截器中处理
-  }
+  } catch (error) {}
 }
 
-// 保存设置
 const saveSettings = async () => {
   try {
     await settingsApi.updateSettings({
@@ -120,9 +169,7 @@ const saveSettings = async () => {
       user_id: getUserId()
     })
     ElMessage.success('设置已保存')
-  } catch (error) {
-    // 错误已在拦截器中处理
-  }
+  } catch (error) {}
 }
 
 const resetSettings = () => {
@@ -130,7 +177,6 @@ const resetSettings = () => {
   ElMessage.info('设置已重置')
 }
 
-// 组件挂载时加载设置
 onMounted(() => {
   loadSettings()
 })
@@ -141,54 +187,153 @@ onMounted(() => {
   width: 100%;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 32px 0 0 0;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+  height: 100%;
+  overflow: auto;
 }
-.settings-card {
-  width: 480px;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.04);
-  padding: 36px 36px 24px 36px;
+
+.settings-container {
+  width: 100%;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  gap: 20px;
 }
-.settings-header {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: #222;
-  margin-bottom: 18px;
-  text-align: center;
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
+
+.header-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.header-text {
+  flex: 1;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.settings-card {
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: 24px;
+}
+
 .settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.settings-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.settings-form :deep(.el-form-item__label) {
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+  font-size: 13px;
+}
+
+.full-width {
   width: 100%;
 }
-.settings-select {
-  width: 180px;
+
+.switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-:deep(.el-form-item__content) {
-  justify-content: flex-start;
+
+.switch-label {
+  font-size: 13px;
+  color: var(--text-muted);
 }
-.settings-tip {
+
+.form-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
   font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
+  color: var(--text-muted);
 }
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
 @media (max-width: 768px) {
   .settings-root {
-    padding: 16px 16px 0 16px;
+    padding: 20px 16px;
   }
+  
   .settings-card {
-    width: 100%;
-    padding: 24px 20px 20px 20px;
-    border-radius: 16px;
+    padding: 24px 20px;
   }
-  .settings-select {
-    width: 100%;
+  
+  .form-grid {
+    grid-template-columns: 1fr;
   }
-  :deep(.el-form-item__content) {
-    flex-wrap: wrap;
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .form-actions .el-button {
+    width: 100%;
   }
 }
 </style>

@@ -152,8 +152,8 @@ npu-smi info
   <img src="images/preview.png" alt="文档预览" width="800">
   <p>文档预览 - 智能解析和展示文档内容</p>
   
-  <img src="images/upload.png" alt="文件上传" width="800">
-  <p>文件上次 - 批量上传</p>
+  <img src="images/setting.png" alt="系统设置" width="800">
+  <p>系统设置 - 后端选择</p>
 </div>
 
 ### 本地开发环境

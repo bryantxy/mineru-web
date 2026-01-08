@@ -10,7 +10,7 @@ class Settings(Base):
     force_ocr = Column(Boolean, default=False)
     table_recognition = Column(Boolean, default=False)
     formula_recognition = Column(Boolean, default=False)
-    backend = Column(Enum(SettingsBackendType), default=SettingsBackendType.PIPELINE)
+    backend = Column(Enum(SettingsBackendType), default=SettingsBackendType.HYBRID_HTTP_CLIENT)
 
     def to_dict(self):
         return {
@@ -19,5 +19,5 @@ class Settings(Base):
             'force_ocr': self.force_ocr,
             'table_recognition': self.table_recognition,
             'formula_recognition': self.formula_recognition,
-            'backend': self.backend.value if self.backend else SettingsBackendType.PIPELINE.value
+            'backend': self.backend.value if self.backend else SettingsBackendType.HYBRID_HTTP_CLIENT.value
         }

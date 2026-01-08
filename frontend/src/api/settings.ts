@@ -6,7 +6,7 @@ export interface SettingsData {
   ocr_lang: string
   formula_recognition: boolean
   table_recognition: boolean
-  backend: 'pipeline' | 'vlm-http-client'
+  backend: 'pipeline' | 'vlm-http-client' | 'hybrid-http-client'
   version?: string
 }
 
