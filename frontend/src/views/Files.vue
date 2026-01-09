@@ -92,6 +92,11 @@
               <span class="cell-text">{{ formatDateTime(row.upload_time) }}</span>
             </template>
           </el-table-column>
+          <el-table-column prop="finish_at" label="解析完成时间" width="160">
+            <template #default="{ row }">
+              <span class="cell-text">{{ formatDateTime(row.finish_at) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="110">
             <template #default="{ row }">
               <div class="status-cell">

@@ -262,10 +262,15 @@ onMounted(async () => {
   if (!currentFile.value && allFiles.value.length > 0) {
     currentFile.value = allFiles.value[0]
   }
-  
+
   // 初始化完成
   await nextTick()
   isReady.value = true
+
+  // 如果初始视图模式需要显示 markdown，立即加载内容
+  if (viewMode.value !== 'origin' && currentFile.value) {
+    await fetchParsedContent()
+  }
 })
 
 const filteredFiles = computed(() => allFiles.value)
