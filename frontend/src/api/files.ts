@@ -37,6 +37,25 @@ export interface DownloadUrlResponse {
   url: string
 }
 
+// 区域信息响应
+export interface RegionInfo {
+  type: string
+  bbox: number[]  // [x0, y0, x1, y1]
+  category: string
+}
+
+export interface PageRegions {
+  page_idx: number
+  page_width: number
+  page_height: number
+  regions: RegionInfo[]
+}
+
+export interface RegionsResponse {
+  regions: PageRegions[]
+  message?: string
+}
+
 // 文件 API
 export const filesApi = {
   /**
@@ -106,6 +125,28 @@ export const filesApi = {
    */
   getDownloadUrl(fileId: string) {
     return api.get<DownloadUrlResponse>(`/files/${fileId}/download_url`)
+      .then(res => res.data)
+  },
+
+  /**
+   * 获取文件内容代理URL（用于浏览器预览）
+   */
+  getFileContentUrl(fileId: string) {
+    return `/api/files/${fileId}/content`
+  },
+
+  /**
+   * 获取文件下载代理URL
+   */
+  getFileDownloadUrl(fileId: string) {
+    return `/api/files/${fileId}/download`
+  },
+
+  /**
+   * 获取文件识别区域信息
+   */
+  getFileRegions(fileId: string) {
+    return api.get<RegionsResponse>(`/files/${fileId}/regions`)
       .then(res => res.data)
   }
 }

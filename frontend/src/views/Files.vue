@@ -170,7 +170,6 @@ import { Upload, Delete, Search, Download, ArrowDown } from '@element-plus/icons
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import JSZip from 'jszip'
-import axios from 'axios'
 import { filesApi } from '@/api/files'
 import { formatFileSize } from '@/utils/format'
 import {
@@ -318,18 +317,18 @@ const deleteFile = (file: FileItem) => {
 
 const downloadFile = async (file: FileItem) => {
   try {
-    const result = await filesApi.getDownloadUrl(file.id)
-    const response = await axios.get(result.url, { responseType: 'blob' })
-    const blob = new Blob([response.data])
-    const url = window.URL.createObjectURL(blob)
+    // 使用代理 URL 下载，避免跨域问题
+    const downloadUrl = filesApi.getFileDownloadUrl(file.id)
     const link = document.createElement('a')
-    link.href = url
+    link.href = downloadUrl
     link.download = file.filename
     document.body.appendChild(link)
     link.click()
-    window.URL.revokeObjectURL(url)
     document.body.removeChild(link)
-  } catch (e) {}
+    ElMessage.success('下载开始')
+  } catch (e) {
+    ElMessage.error('下载失败')
+  }
 }
 
 const handleBatchDelete = async () => {
