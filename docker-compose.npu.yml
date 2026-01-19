@@ -4,7 +4,10 @@
 
 services:
   frontend:
-    image: lpdswing/mineru-web-frontend:v2.7.1
+    image: ${REGISTRY:-}mineru-web-frontend:${VERSION:-v2.8.0}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "8088:80"
     depends_on:
@@ -14,7 +17,10 @@ services:
       - mineru-network
 
   backend:
-    image: lpdswing/mineru-web-backend-npu:v2.7.1
+    image: ${REGISTRY:-}mineru-web-backend-npu:${VERSION:-v2.8.0}
+    build:
+      context: ./backend
+      dockerfile: npu.Dockerfile
     # 昇腾 NPU 设备配置
     # Ascend NPU device configuration
     devices:
@@ -47,7 +53,10 @@ services:
       - mineru-network
 
   worker:
-    image: lpdswing/mineru-web-backend-npu:v2.7.1
+    image: ${REGISTRY:-}mineru-web-backend-npu:${VERSION:-v2.8.0}
+    build:
+      context: ./backend
+      dockerfile: npu.Dockerfile
     deploy:
       # 设置 worker 副本数量，根据 NPU 资源调整
       replicas: ${WORKER_REPLICAS:-1}

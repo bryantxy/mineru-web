@@ -1,4 +1,7 @@
+import json
+from pathlib import Path
 from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -6,6 +9,7 @@ from app.models.file import File as FileModel
 from app.models.parsed_content import ParsedContent
 from app.utils.minio_client import minio_client, MINIO_BUCKET
 from app.utils.user_dep import get_user_id
+from app.services.parser import get_buckets
 
 router = APIRouter()
 
@@ -84,4 +88,162 @@ def delete_file(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
-    return {"msg": "删除成功"} 
+    return {"msg": "删除成功"}
+
+
+@router.get("/files/{file_id}/content")
+def get_file_content(
+    file_id: int,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    代理获取文件内容，解决浏览器跨域问题
+    """
+    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == user_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    try:
+        response = minio_client.get_object(MINIO_BUCKET, file.minio_path)
+        content_type = file.content_type or 'application/octet-stream'
+        
+        # 对 PDF 文件设置正确的 Content-Type
+        if file.filename.lower().endswith('.pdf'):
+            content_type = 'application/pdf'
+        
+        return StreamingResponse(
+            response,
+            media_type=content_type,
+            headers={
+                'Content-Disposition': f'inline; filename="{file.filename}"',
+                'Accept-Ranges': 'bytes'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取文件失败: {str(e)}")
+
+
+@router.get("/files/{file_id}/regions")
+def get_file_regions(
+    file_id: int,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    获取文件识别区域信息（从 middle.json）
+    返回每页的识别区域包括位置、类型等信息
+    """
+    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == user_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    try:
+        # 获取 middle.json 文件路径
+        file_name_stem = Path(file.minio_path).stem
+        middle_json_path = f"{file_name_stem}_middle.json"
+        
+        # 获取 bucket
+        buckets = get_buckets()
+        mds_bucket = buckets[0]
+        
+        # 从 MinIO 获取 middle.json
+        try:
+            response = minio_client.get_object(mds_bucket, middle_json_path)
+            middle_json = json.loads(response.read().decode('utf-8'))
+        except Exception:
+            return {"regions": [], "message": "暂无识别区域信息"}
+        
+        # 解析 middle.json 提取区域信息
+        regions = []
+        pdf_info = middle_json.get('pdf_info', [])
+        
+        for page_info in pdf_info:
+            page_idx = page_info.get('page_idx', 0)
+            page_size = page_info.get('page_size', [0, 0])
+            page_width = page_size[0] if len(page_size) > 0 else 0
+            page_height = page_size[1] if len(page_size) > 1 else 0
+            
+            page_regions = []
+            
+            # 处理 preproc_blocks（预处理块，包含图片、表格等）
+            preproc_blocks = page_info.get('preproc_blocks', [])
+            for block in preproc_blocks:
+                block_type = block.get('type', 'unknown')
+                bbox = block.get('bbox', [])
+                if bbox and len(bbox) >= 4:
+                    page_regions.append({
+                        'type': block_type,
+                        'bbox': bbox,  # [x0, y0, x1, y1]
+                        'category': 'preproc'
+                    })
+            
+            # 处理 para_blocks（段落块）
+            para_blocks = page_info.get('para_blocks', [])
+            for block in para_blocks:
+                block_type = block.get('type', 'unknown')
+                bbox = block.get('bbox', [])
+                if bbox and len(bbox) >= 4:
+                    page_regions.append({
+                        'type': block_type,
+                        'bbox': bbox,
+                        'category': 'para'
+                    })
+                
+                # 处理嵌套的 lines（行）
+                lines = block.get('lines', [])
+                for line in lines:
+                    line_bbox = line.get('bbox', [])
+                    if line_bbox and len(line_bbox) >= 4:
+                        line_type = 'text_line'
+                        # 检查是否包含公式
+                        spans = line.get('spans', [])
+                        for span in spans:
+                            if span.get('type') == 'interline_equation':
+                                line_type = 'equation'
+                                break
+                        page_regions.append({
+                            'type': line_type,
+                            'bbox': line_bbox,
+                            'category': 'line'
+                        })
+            
+            regions.append({
+                'page_idx': page_idx,
+                'page_width': page_width,
+                'page_height': page_height,
+                'regions': page_regions
+            })
+        
+        return {"regions": regions}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取区域信息失败: {str(e)}")
+
+
+@router.get("/files/{file_id}/download")
+def download_file(
+    file_id: int,
+    user_id: str = Depends(get_user_id),
+    db: Session = Depends(get_db)
+):
+    """
+    下载原始文件
+    """
+    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == user_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    try:
+        response = minio_client.get_object(MINIO_BUCKET, file.minio_path)
+        content_type = file.content_type or 'application/octet-stream'
+        
+        return StreamingResponse(
+            response,
+            media_type=content_type,
+            headers={
+                'Content-Disposition': f'attachment; filename="{file.filename}"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"下载文件失败: {str(e)}") 

@@ -1,6 +1,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# 增加 Node.js 内存限制
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 # 先安装依赖后再复制源码可利用缓存
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund

@@ -84,6 +84,15 @@
               <span>Markdown</span>
             </button>
           </div>
+          <!-- 高亮控制 -->
+          <div class="highlight-toggle" v-if="viewMode !== 'markdown' && isPdf(currentFile?.filename)">
+            <el-switch 
+              v-model="showHighlight" 
+              active-text="高亮区域" 
+              inactive-text=""
+              size="small"
+            />
+          </div>
         </div>
         <div class="header-right">
           <el-dropdown @command="handleExport">
@@ -94,6 +103,7 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item command="original">原始文件</el-dropdown-item>
                 <el-dropdown-item v-for="(name, format) in ExportFormatNames" :key="format" :command="format">
                   {{ name }}
                 </el-dropdown-item>
@@ -114,13 +124,56 @@
           <div class="panel-content">
             <template v-if="showOrigin && currentFile">
               <template v-if="isPdf(currentFile.filename)">
-                <iframe 
-                  v-if="fileUrl" 
-                  :src="fileUrl" 
-                  class="pdf-frame"
-                  ref="pdfFrame"
-                  @load="handlePdfLoad"
-                ></iframe>
+                <!-- PDF.js 渲染容器 -->
+                <div class="pdf-container" ref="pdfContainer">
+                  <div v-if="pdfLoading" class="loading-state">
+                    <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+                    <span>正在加载PDF...</span>
+                  </div>
+                  <div class="pdf-pages" ref="pdfPagesContainer">
+                    <div 
+                      v-for="pageNum in totalPages" 
+                      :key="pageNum"
+                      class="pdf-page-wrapper"
+                      :data-page="pageNum"
+                    >
+                      <canvas 
+                        :ref="el => setCanvasRef(el, pageNum)" 
+                        class="pdf-canvas"
+                      ></canvas>
+                      <!-- 高亮覆盖层 -->
+                      <svg 
+                        v-if="showHighlight && pageRegions[pageNum - 1]"
+                        class="highlight-overlay"
+                        :viewBox="`0 0 ${pageRegions[pageNum - 1].page_width} ${pageRegions[pageNum - 1].page_height}`"
+                        preserveAspectRatio="none"
+                      >
+                        <rect
+                          v-for="(region, idx) in pageRegions[pageNum - 1].regions"
+                          :key="idx"
+                          :x="region.bbox[0]"
+                          :y="region.bbox[1]"
+                          :width="region.bbox[2] - region.bbox[0]"
+                          :height="region.bbox[3] - region.bbox[1]"
+                          :class="['highlight-rect', `type-${region.type}`, `category-${region.category}`]"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                  <!-- PDF 控制栏 -->
+                  <div class="pdf-controls" v-if="totalPages > 0">
+                    <el-button-group>
+                      <el-button size="small" @click="zoomOut" :disabled="scale <= 0.5">
+                        <el-icon><ZoomOut /></el-icon>
+                      </el-button>
+                      <el-button size="small" disabled>{{ Math.round(scale * 100) }}%</el-button>
+                      <el-button size="small" @click="zoomIn" :disabled="scale >= 3">
+                        <el-icon><ZoomIn /></el-icon>
+                      </el-button>
+                    </el-button-group>
+                    <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
+                  </div>
+                </div>
               </template>
               <template v-else-if="isOffice(currentFile.filename)">
                 <div v-if="loadingOffice" class="loading-state">
@@ -164,12 +217,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   FolderOpened, Document, Search, Download, ArrowDown, 
-  EditPen, Expand, Fold, Loading 
+  EditPen, Expand, Fold, Loading, ZoomIn, ZoomOut 
 } from '@element-plus/icons-vue'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
@@ -177,7 +230,12 @@ import mk from 'markdown-it-katex'
 import 'katex/dist/katex.min.css'
 import mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
+import * as pdfjsLib from 'pdfjs-dist'
 import { getUserId } from '@/utils/user'
+import { filesApi, type PageRegions } from '@/api/files'
+
+// 设置 PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
 
 const route = useRoute()
 const md = MarkdownIt({ html: true, linkify: true, typographer: true }).use(mk)
@@ -198,6 +256,20 @@ const sidebarTotal = ref(0)
 const fileSearch = ref('')
 const currentFile = ref<FileItem | null>(null)
 const isReady = ref(false)
+
+// PDF.js 相关状态
+const pdfContainer = ref<HTMLElement | null>(null)
+const pdfPagesContainer = ref<HTMLElement | null>(null)
+const pdfDoc = ref<pdfjsLib.PDFDocumentProxy | null>(null)
+const totalPages = ref(0)
+const currentPage = ref(1)
+const scale = ref(1.5)
+const pdfLoading = ref(false)
+const canvasRefs = ref<Map<number, HTMLCanvasElement>>(new Map())
+
+// 高亮相关状态
+const showHighlight = ref(true)
+const pageRegions = ref<PageRegions[]>([])
 
 // 获取侧边栏文件列表
 const fetchSidebarFiles = async () => {
@@ -273,6 +345,14 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  // 清理 PDF 文档
+  if (pdfDoc.value) {
+    pdfDoc.value.destroy()
+    pdfDoc.value = null
+  }
+})
+
 const filteredFiles = computed(() => allFiles.value)
 
 const selectFile = (file: FileItem) => {
@@ -294,7 +374,6 @@ const isPdf = (name?: string) => name ? /\.pdf$/i.test(name) : false
 const page = ref(1)
 const parsedContent = ref('')
 const loading = ref(false)
-const hasMore = ref(true)
 
 const fetchParsedContent = async () => {
   if (!currentFile.value) return
@@ -329,8 +408,27 @@ const ExportFormatNames: Record<ExportFormat, string> = {
   [ExportFormats.MARKDOWN_PAGE]: 'Markdown带页码'
 }
 
-const handleExport = async (format: ExportFormat) => {
+const handleExport = async (format: string) => {
   if (!currentFile.value) return
+  
+  // 处理原始文件下载
+  if (format === 'original') {
+    try {
+      const downloadUrl = filesApi.getFileDownloadUrl(currentFile.value.id)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = currentFile.value.filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      ElMessage.success('下载开始')
+    } catch (e) {
+      ElMessage.error('下载失败')
+    }
+    return
+  }
+  
+  // 处理导出格式
   try {
     const res = await axios.get(`/api/files/${currentFile.value.id}/export`, {
       params: { format },
@@ -347,7 +445,7 @@ const handleExport = async (format: ExportFormat) => {
       link.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(link)
-      ElMessage.success(`导出${ExportFormatNames[format]}成功`)
+      ElMessage.success(`导出${ExportFormatNames[format as ExportFormat]}成功`)
     } else {
       ElMessage.error(`导出失败`)
     }
@@ -361,13 +459,135 @@ const textContent = ref('')
 const officeContent = ref('')
 const loadingOffice = ref(false)
 
+// 设置 canvas 引用
+const setCanvasRef = (el: any, pageNum: number) => {
+  if (el) {
+    canvasRefs.value.set(pageNum, el as HTMLCanvasElement)
+  }
+}
+
+// 加载 PDF 文件
+const loadPdf = async () => {
+  if (!currentFile.value || !isPdf(currentFile.value.filename)) return
+  
+  pdfLoading.value = true
+  pageRegions.value = []
+  
+  // 清理旧的 PDF 文档
+  if (pdfDoc.value) {
+    pdfDoc.value.destroy()
+    pdfDoc.value = null
+  }
+  
+  try {
+    // 使用代理 URL 加载 PDF
+    const pdfUrl = filesApi.getFileContentUrl(currentFile.value.id)
+    
+    const loadingTask = pdfjsLib.getDocument({
+      url: pdfUrl,
+      httpHeaders: {
+        'X-User-Id': getUserId()
+      }
+    })
+    
+    pdfDoc.value = await loadingTask.promise
+    totalPages.value = pdfDoc.value.numPages
+    currentPage.value = 1
+    
+    // 等待 DOM 更新
+    await nextTick()
+    
+    // 渲染所有页面
+    await renderAllPages()
+    
+    // 加载区域信息
+    await loadRegions()
+    
+  } catch (e) {
+    console.error('加载PDF失败', e)
+    ElMessage.error('加载PDF失败')
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
+// 渲染所有 PDF 页面
+const renderAllPages = async () => {
+  if (!pdfDoc.value) return
+  
+  for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
+    await renderPage(pageNum)
+  }
+}
+
+// 渲染单个页面
+const renderPage = async (pageNum: number) => {
+  if (!pdfDoc.value) return
+  
+  const page = await pdfDoc.value.getPage(pageNum)
+  const canvas = canvasRefs.value.get(pageNum)
+  
+  if (!canvas) return
+  
+  const viewport = page.getViewport({ scale: scale.value })
+  const context = canvas.getContext('2d')
+  
+  if (!context) return
+  
+  canvas.height = viewport.height
+  canvas.width = viewport.width
+  
+  const renderContext = {
+    canvasContext: context,
+    viewport: viewport
+  }
+  
+  await page.render(renderContext).promise
+}
+
+// 加载识别区域信息
+const loadRegions = async () => {
+  if (!currentFile.value) return
+  
+  try {
+    const response = await filesApi.getFileRegions(currentFile.value.id)
+    pageRegions.value = response.regions || []
+  } catch (e) {
+    console.error('加载区域信息失败', e)
+    pageRegions.value = []
+  }
+}
+
+// 缩放控制
+const zoomIn = () => {
+  scale.value = Math.min(scale.value + 0.25, 3)
+}
+
+const zoomOut = () => {
+  scale.value = Math.max(scale.value - 0.25, 0.5)
+}
+
+// 监听缩放变化，重新渲染
+watch(scale, async () => {
+  if (pdfDoc.value) {
+    await nextTick()
+    await renderAllPages()
+  }
+})
+
 const fetchFileUrl = async () => {
   if (!currentFile.value) return
+  
+  // 对于 PDF 文件，使用代理 URL
+  if (isPdf(currentFile.value.filename)) {
+    fileUrl.value = filesApi.getFileContentUrl(currentFile.value.id)
+    await loadPdf()
+    return
+  }
+  
+  // 其他文件类型使用代理 URL
   try {
-    const res = await axios.get(`/api/files/${currentFile.value.id}/download_url`, {
-      headers: { 'X-User-Id': getUserId() }
-    })
-    fileUrl.value = res.data.url
+    fileUrl.value = filesApi.getFileContentUrl(currentFile.value.id)
   } catch (e) {
     fileUrl.value = ''
     textContent.value = ''
@@ -379,7 +599,9 @@ const previewOfficeFile = async () => {
   if (!currentFile.value || !fileUrl.value) return
   loadingOffice.value = true
   try {
-    const response = await fetch(fileUrl.value)
+    const response = await fetch(fileUrl.value, {
+      headers: { 'X-User-Id': getUserId() }
+    })
     const blob = await response.blob()
     if (isWord(currentFile.value.filename)) {
       const arrayBuffer = await blob.arrayBuffer()
@@ -402,7 +624,9 @@ const previewOfficeFile = async () => {
 const fetchTextContent = async () => {
   if (!fileUrl.value) return
   try {
-    const res = await axios.get(fileUrl.value)
+    const res = await axios.get(fileUrl.value, {
+      headers: { 'X-User-Id': getUserId() }
+    })
     textContent.value = res.data
   } catch (e) {
     textContent.value = ''
@@ -414,46 +638,14 @@ watch(currentFile, async (newFile) => {
   fileUrl.value = ''
   textContent.value = ''
   officeContent.value = ''
+  totalPages.value = 0
+  pageRegions.value = []
+  canvasRefs.value.clear()
+  
   await fetchFileUrl()
   if (isText(newFile.filename)) await fetchTextContent()
   else if (isOffice(newFile.filename)) await previewOfficeFile()
 })
-
-const pdfFrame = ref<HTMLIFrameElement | null>(null)
-const currentPdfPage = ref(1)
-
-const handlePdfLoad = () => {
-  if (!pdfFrame.value) return
-  pdfFrame.value.contentWindow?.addEventListener('scroll', handlePdfScroll)
-}
-
-const handlePdfScroll = async () => {
-  if (!pdfFrame.value) return
-  const iframe = pdfFrame.value
-  const scrollTop = iframe.contentWindow?.scrollY || 0
-  const pageHeight = iframe.contentWindow?.innerHeight || 0
-  const newPage = Math.floor(scrollTop / pageHeight) + 1
-  if (newPage !== currentPdfPage.value) {
-    currentPdfPage.value = newPage
-    await loadMarkdownByPage()
-  }
-}
-
-const loadMarkdownByPage = async () => {
-  if (!currentFile.value || loading.value) return
-  loading.value = true
-  try {
-    const res = await axios.get(`/api/files/${currentFile.value.id}/parsed_content`, {
-      headers: { 'X-User-Id': getUserId() }
-    })
-    parsedContent.value = res.data || ''
-    hasMore.value = false
-  } catch (e) {
-    ElMessage.error('加载内容失败')
-  } finally {
-    loading.value = false
-  }
-}
 
 const renderedContent = computed(() => md.render(parsedContent.value || ''))
 </script>
@@ -581,6 +773,12 @@ const renderedContent = computed(() => md.render(parsedContent.value || ''))
   text-overflow: ellipsis;
 }
 
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .view-toggle {
   display: flex;
   background: var(--bg-tertiary);
@@ -612,6 +810,11 @@ const renderedContent = computed(() => md.render(parsedContent.value || ''))
   box-shadow: var(--shadow-sm);
 }
 
+.highlight-toggle {
+  display: flex;
+  align-items: center;
+}
+
 /* 预览内容 */
 .preview-content {
   flex: 1;
@@ -640,10 +843,106 @@ const renderedContent = computed(() => md.render(parsedContent.value || ''))
   padding: 24px;
 }
 
-.pdf-frame {
+/* PDF 容器样式 */
+.pdf-container {
   width: 100%;
   height: calc(100vh - 120px);
-  border: none;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.pdf-pages {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #525659;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: white;
+}
+
+.pdf-canvas {
+  display: block;
+}
+
+.highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 高亮矩形样式 */
+.highlight-rect {
+  fill: transparent;
+  stroke-width: 2;
+  opacity: 0.6;
+}
+
+/* 根据类型设置不同颜色 */
+.highlight-rect.type-text {
+  stroke: #4CAF50;
+  fill: rgba(76, 175, 80, 0.1);
+}
+
+.highlight-rect.type-text_line {
+  stroke: #2196F3;
+  fill: rgba(33, 150, 243, 0.05);
+}
+
+.highlight-rect.type-title {
+  stroke: #FF9800;
+  fill: rgba(255, 152, 0, 0.15);
+}
+
+.highlight-rect.type-image {
+  stroke: #E91E63;
+  fill: rgba(233, 30, 99, 0.1);
+}
+
+.highlight-rect.type-table {
+  stroke: #9C27B0;
+  fill: rgba(156, 39, 176, 0.1);
+}
+
+.highlight-rect.type-equation,
+.highlight-rect.type-interline_equation {
+  stroke: #00BCD4;
+  fill: rgba(0, 188, 212, 0.1);
+}
+
+.highlight-rect.type-figure {
+  stroke: #FF5722;
+  fill: rgba(255, 87, 34, 0.1);
+}
+
+.highlight-rect.category-preproc {
+  stroke-dasharray: 4;
+}
+
+.pdf-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-light);
+}
+
+.page-info {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .image-preview {
@@ -786,6 +1085,7 @@ const renderedContent = computed(() => md.render(parsedContent.value || ''))
     order: 3;
     width: 100%;
     margin-top: 12px;
+    flex-wrap: wrap;
   }
   
   .view-toggle {
