@@ -12,14 +12,24 @@
 
 ### 方式一：使用预构建镜像（推荐）
 
-如果您希望使用预构建的镜像，可以直接运行：
+#### NVIDIA GPU 环境
 
 ```bash
-# NVIDIA GPU 环境
+# 不启动 VLM 服务（使用 pipeline 模式）
 docker-compose up -d
 
-# 华为昇腾 NPU 环境
+# 启动 VLM 服务
+docker-compose -f docker-compose.yml -f docker-compose.vllm.yaml up -d
+```
+
+#### 华为昇腾 NPU 环境
+
+```bash
+# 不启动 VLM 服务（使用 pipeline 模式）
 docker-compose -f docker-compose.npu.yml up -d
+
+# 启动 VLM 服务
+docker-compose -f docker-compose.npu.yml -f docker-compose.vllm.npu.yaml up -d
 ```
 
 ### 方式二：本地构建镜像

@@ -1,7 +1,36 @@
-services:
+# MinerU Web VLM 服务配置
+# 使用方法: docker-compose -f docker-compose.yml -f docker-compose.vllm.yaml up -d
 
+services:
+  # 覆盖 backend 配置，添加对 vllm-server 的依赖
+  backend:
+    environment:
+      - BACKEND=vllm-client
+      - SERVER_URL=http://mineru-vllm-server:30000
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mineru-vllm-server:
+        condition: service_healthy
+
+  # 覆盖 worker 配置，添加对 vllm-server 的依赖
+  worker:
+    environment:
+      - BACKEND=vllm-client
+      - SERVER_URL=http://mineru-vllm-server:30000
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mineru-vllm-server:
+        condition: service_healthy
+
+  # VLM 服务
   mineru-vllm-server:
-    image: lpdswing/mineru-web-backend:v2.7.1
+    image: ${REGISTRY:-}mineru-web-backend:${VERSION:-v2.8.0}
     container_name: mineru-vllm-server
     restart: always
     ports:
@@ -26,6 +55,10 @@ services:
       - mineru-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:30000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         reservations:
