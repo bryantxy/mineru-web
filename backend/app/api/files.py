@@ -1,8 +1,7 @@
 import json
 from pathlib import Path
 from fastapi import APIRouter, Query, HTTPException, Depends
-from fastapi.responses import StreamingResponse
-from sqlalchemy import or_
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.file import File as FileModel
@@ -112,8 +111,17 @@ def get_file_content(
         if file.filename.lower().endswith('.pdf'):
             content_type = 'application/pdf'
         
+        # 使用生成器进行流式传输，支持大文件
+        def iter_file():
+            try:
+                for chunk in response.stream(32 * 1024):  # 32KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
+        
         return StreamingResponse(
-            response,
+            iter_file(),
             media_type=content_type,
             headers={
                 'Content-Disposition': f'inline; filename="{file.filename}"',
@@ -143,9 +151,12 @@ def get_file_regions(
         file_name_stem = Path(file.minio_path).stem
         middle_json_path = f"{file_name_stem}_middle.json"
         
-        # 获取 bucket
-        buckets = get_buckets()
-        mds_bucket = buckets[0]
+        # 获取 bucket，如果配置不存在则使用默认值
+        try:
+            buckets = get_buckets()
+            mds_bucket = buckets[0]
+        except Exception:
+            mds_bucket = 'mds'  # 默认 bucket 名称
         
         # 从 MinIO 获取 middle.json
         try:
@@ -238,8 +249,17 @@ def download_file(
         response = minio_client.get_object(MINIO_BUCKET, file.minio_path)
         content_type = file.content_type or 'application/octet-stream'
         
+        # 使用生成器进行流式传输，支持大文件
+        def iter_file():
+            try:
+                for chunk in response.stream(32 * 1024):  # 32KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
+        
         return StreamingResponse(
-            response,
+            iter_file(),
             media_type=content_type,
             headers={
                 'Content-Disposition': f'attachment; filename="{file.filename}"'
