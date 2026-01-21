@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from fastapi import APIRouter, Query, HTTPException, Depends
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.file import File as FileModel
@@ -111,16 +111,21 @@ def get_file_content(
         if file.filename.lower().endswith('.pdf'):
             content_type = 'application/pdf'
         
-        # 读取文件内容到内存
-        file_data = response.read()
+        # 使用生成器进行流式传输，支持大文件
+        def iter_file():
+            try:
+                for chunk in response.stream(32 * 1024):  # 32KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
         
-        return Response(
-            content=file_data,
+        return StreamingResponse(
+            iter_file(),
             media_type=content_type,
             headers={
                 'Content-Disposition': f'inline; filename="{file.filename}"',
-                'Accept-Ranges': 'bytes',
-                'Content-Length': str(len(file_data))
+                'Accept-Ranges': 'bytes'
             }
         )
     except Exception as e:
@@ -244,15 +249,20 @@ def download_file(
         response = minio_client.get_object(MINIO_BUCKET, file.minio_path)
         content_type = file.content_type or 'application/octet-stream'
         
-        # 读取文件内容
-        file_data = response.read()
+        # 使用生成器进行流式传输，支持大文件
+        def iter_file():
+            try:
+                for chunk in response.stream(32 * 1024):  # 32KB chunks
+                    yield chunk
+            finally:
+                response.close()
+                response.release_conn()
         
-        return Response(
-            content=file_data,
+        return StreamingResponse(
+            iter_file(),
             media_type=content_type,
             headers={
-                'Content-Disposition': f'attachment; filename="{file.filename}"',
-                'Content-Length': str(len(file_data))
+                'Content-Disposition': f'attachment; filename="{file.filename}"'
             }
         )
     except Exception as e:
